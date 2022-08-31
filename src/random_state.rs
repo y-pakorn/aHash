@@ -1,17 +1,25 @@
-#[cfg(all(feature = "runtime-rng", not(all(feature = "compile-time-rng", test))))]
-use crate::convert::Convert;
 #[cfg(feature = "specialize")]
 use crate::BuildHasherExt;
 
 #[cfg(any(
     all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)),
-    all(any(target_arch = "arm", target_arch = "aarch64"), target_feature = "crypto", not(miri), feature = "stdsimd")
+    all(
+        any(target_arch = "arm", target_arch = "aarch64"),
+        target_feature = "crypto",
+        not(miri),
+        feature = "stdsimd"
+    )
 ))]
 pub use crate::aes_hash::*;
 
 #[cfg(not(any(
     all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)),
-    all(any(target_arch = "arm", target_arch = "aarch64"), target_feature = "crypto", not(miri), feature = "stdsimd")
+    all(
+        any(target_arch = "arm", target_arch = "aarch64"),
+        target_feature = "crypto",
+        not(miri),
+        feature = "stdsimd"
+    )
 )))]
 pub use crate::fallback_hash::*;
 
@@ -36,14 +44,14 @@ use once_cell::race::OnceBox;
 
 #[cfg(any(
     all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)),
-    all(any(target_arch = "arm", target_arch = "aarch64"), target_feature = "crypto", not(miri), feature = "stdsimd")
+    all(
+        any(target_arch = "arm", target_arch = "aarch64"),
+        target_feature = "crypto",
+        not(miri),
+        feature = "stdsimd"
+    )
 ))]
 use crate::aes_hash::*;
-#[cfg(not(any(
-    all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)),
-    all(any(target_arch = "arm", target_arch = "aarch64"), target_feature = "crypto", not(miri), feature = "stdsimd")
-)))]
-use crate::fallback_hash::*;
 
 #[cfg(not(all(target_arch = "arm", target_os = "none")))]
 static RAND_SOURCE: OnceBox<Box<dyn RandomSource + Send + Sync>> = OnceBox::new();
@@ -51,11 +59,9 @@ static RAND_SOURCE: OnceBox<Box<dyn RandomSource + Send + Sync>> = OnceBox::new(
 /// A supplier of Randomness used for different hashers.
 /// See [RandomState.set_random_source].
 pub trait RandomSource {
-
     fn get_fixed_seeds(&self) -> &'static [[u64; 4]; 2];
 
     fn gen_hasher_seed(&self) -> usize;
-
 }
 
 pub(crate) const PI: [u64; 4] = [
@@ -83,6 +89,7 @@ impl DefaultRandomSource {
         }
     }
 
+    #[allow(dead_code)]
     const fn default() -> DefaultRandomSource {
         DefaultRandomSource {
             counter: AtomicUsize::new(PI[3] as usize),
@@ -91,37 +98,6 @@ impl DefaultRandomSource {
 }
 
 impl RandomSource for DefaultRandomSource {
-
-    #[cfg(all(feature = "runtime-rng", not(all(feature = "compile-time-rng", test))))]
-    fn get_fixed_seeds(&self) -> &'static [[u64; 4]; 2] {
-        static SEEDS: OnceBox<[[u64; 4]; 2]> = OnceBox::new();
-
-        SEEDS.get_or_init(|| {
-            let mut result: [u8; 64] = [0; 64];
-            getrandom::getrandom(&mut result).expect("getrandom::getrandom() failed.");
-            Box::new(result.convert())
-        })
-    }
-
-    #[cfg(all(feature = "compile-time-rng", any(not(feature = "runtime-rng"), test)))]
-    fn get_fixed_seeds(&self) -> &'static [[u64; 4]; 2] {
-        const RAND: [[u64; 4]; 2] = [
-            [
-                const_random!(u64),
-                const_random!(u64),
-                const_random!(u64),
-                const_random!(u64),
-            ], [
-                const_random!(u64),
-                const_random!(u64),
-                const_random!(u64),
-                const_random!(u64),
-            ]
-        ];
-        &RAND
-    }
-
-    #[cfg(all(not(feature = "runtime-rng"), not(feature = "compile-time-rng")))]
     fn get_fixed_seeds(&self) -> &'static [[u64; 4]; 2] {
         &[PI, PI2]
     }
@@ -164,7 +140,6 @@ impl fmt::Debug for RandomState {
 }
 
 impl RandomState {
-
     /// Provides an optional way to manually supply a source of randomness for Hasher keys.
     ///
     /// The provided [RandomSource] will be used to be used as a source of randomness by [RandomState] to generate new states.
@@ -175,13 +150,17 @@ impl RandomState {
     /// method was previously invoked (true) or if the default source is already being used (false).
     #[cfg(not(all(target_arch = "arm", target_os = "none")))]
     pub fn set_random_source(source: impl RandomSource + Send + Sync + 'static) -> Result<(), bool> {
-        RAND_SOURCE.set(Box::new(Box::new(source))).map_err(|s| s.as_ref().type_id() != TypeId::of::<&DefaultRandomSource>())
+        RAND_SOURCE
+            .set(Box::new(Box::new(source)))
+            .map_err(|s| s.as_ref().type_id() != TypeId::of::<&DefaultRandomSource>())
     }
 
     #[inline]
     #[cfg(not(all(target_arch = "arm", target_os = "none")))]
     fn get_src() -> &'static dyn RandomSource {
-        RAND_SOURCE.get_or_init(|| Box::new(Box::new(DefaultRandomSource::new()))).as_ref()
+        RAND_SOURCE
+            .get_or_init(|| Box::new(Box::new(DefaultRandomSource::new())))
+            .as_ref()
     }
 
     #[inline]
@@ -247,7 +226,12 @@ impl RandomState {
     /// or the same value being passed for more than one parameter.
     #[inline]
     pub const fn with_seeds(k0: u64, k1: u64, k2: u64, k3: u64) -> RandomState {
-        RandomState { k0: k0 ^ PI2[0], k1: k1 ^ PI2[1], k2: k2 ^ PI2[2], k3: k3 ^ PI2[3] }
+        RandomState {
+            k0: k0 ^ PI2[0],
+            k1: k1 ^ PI2[1],
+            k2: k2 ^ PI2[2],
+            k3: k3 ^ PI2[3],
+        }
     }
 }
 
@@ -331,18 +315,6 @@ mod test {
         let a = RandomState::new();
         let b = RandomState::new();
         assert_ne!(a.build_hasher().finish(), b.build_hasher().finish());
-    }
-
-    #[cfg(all(feature = "runtime-rng", not(all(feature = "compile-time-rng", test))))]
-    #[test]
-    fn test_not_pi() {
-        assert_ne!(PI, RandomState::get_src().get_fixed_seeds()[0]);
-    }
-
-    #[cfg(all(feature = "compile-time-rng", any(not(feature = "runtime-rng"), test)))]
-    #[test]
-    fn test_not_pi_const() {
-        assert_ne!(PI, RandomState::get_src().get_fixed_seeds()[0]);
     }
 
     #[cfg(all(not(feature = "runtime-rng"), not(feature = "compile-time-rng")))]
